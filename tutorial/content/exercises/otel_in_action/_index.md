@@ -31,7 +31,7 @@ By the end of this chapter, you should be able to:
 
 The following diagram explains the architecture:
 
-- there is an simple underlying polylot, multi-service application
+- there is an simple underlying polyglot, multi-service application
   - the components are implemented in Java (Spring Boot) and Python (Flask)
   - two alternate frontends connect to a backend part, which in turn connects to a Postgres database
   - there is a simple load generator, which continuously sends requests to the frontend components
@@ -42,7 +42,7 @@ The following diagram explains the architecture:
 
 - all of the collected information is being sent to an OpenTelemetry collector
 
-- the OpenTelemetry Collector exports the information to various thirs-party applications
+- the OpenTelemetry Collector exports the information to various third-party applications
   - the (distributed) traces are exported to a Jaeger instance
   - the metrics are exported to a Prometheus instance
 
@@ -338,7 +338,7 @@ This totally depends on the third-party tool functionality how the information i
 So the following part is less about what OpenTelemetry provides, but more about how Jaeger evaluates it.
 
 Search for all traces with the default settings again.
-This time let's try to compare the Python to the Java invocation for the call to quuery all Todo items.
+This time let's try to compare the Python to the Java invocation for the call to query all Todo items.
 
 Once you have the list, select the `todoui-flask: /` and the `todoui-thymeleaf: GET /`.
 There will probably be many invocations of this type by now, any pair of them will do.
