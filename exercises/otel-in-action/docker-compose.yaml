@@ -87,35 +87,50 @@ services:
   #     - "16686:16686"
   #     - "4317:4317"
 
-  jaeger:
-    image: ${JAEGERTRACING_IMAGE}
-    networks:
-      - todonet
-    command:
-      - "--memory.max-traces=5000"
-      - "--prometheus.server-url=http://prometheus:9090"
-      - "--prometheus.query.normalize-calls=true"
-      - "--prometheus.query.normalize-duration=true"
- #      - "--query.base-path=/jaeger/ui"
-    ports:
-      - "16686:16686"
-    restart: unless-stopped
-    environment:
-      - METRICS_STORAGE_TYPE=prometheus
+#   jaeger:
+#     image: ${JAEGERTRACING_IMAGE}
+#     networks:
+#       - todonet
+#     command:
+#       - "--memory.max-traces=5000"
+#       - "--prometheus.server-url=http://prometheus:9090"
+#       - "--prometheus.query.normalize-calls=true"
+#       - "--prometheus.query.normalize-duration=true"
+#  #      - "--query.base-path=/jaeger/ui"
+#     ports:
+#       - "16686:16686"
+#     restart: unless-stopped
+#     environment:
+#       - METRICS_STORAGE_TYPE=prometheus
+
+  # otelcol:
+  #   image: ${COLLECTOR_CONTRIB_IMAGE}
+  #   restart: unless-stopped
+  #   networks:
+  #     - todonet
+  #   command: ["--config=/etc/otel-collector-config.yml", ""]
+  #   volumes:
+  #     - ./collector/otel-collector-config.yml:/etc/otel-collector-config.yml
+  #   ports:
+  #     - "4317:4317"   # OTLP gRPC receiver
+  #     - "4318:4318"
+  #   depends_on:
+  #     - jaeger
+  #     - tempo
 
   otelcol:
-    image: ${COLLECTOR_CONTRIB_IMAGE}
-    restart: unless-stopped
+    image: otel/opentelemetry-collector:0.86.0
+    command: [ "--config=/etc/otel-collector.yaml" ]
     networks:
       - todonet
-    command: ["--config=/etc/otel-collector-config.yml", ""]
     volumes:
-      - ./collector/otel-collector-config.yml:/etc/otel-collector-config.yml
+      - ./collector/otel-collector-config.yml:/etc/otel-collector.yaml
     ports:
       - "4317:4317"   # OTLP gRPC receiver
       - "4318:4318"
     depends_on:
-      - jaeger
+    # - jaeger
+    - tempo
 
   # Prometheus
   prometheus:
@@ -133,11 +148,58 @@ services:
       - --enable-feature=exemplar-storage
       - --enable-feature=otlp-write-receiver
     volumes:
-      - ./prometheus/prometheus-config.yaml:/etc/prometheus/prometheus-config.yaml
+      - ./shared/prometheus.yaml:/etc/prometheus/prometheus-config.yaml
     restart: unless-stopped
     ports:
       - "${PROMETHEUS_SERVICE_PORT}:${PROMETHEUS_SERVICE_PORT}"
 
+  init:
+    image: &tempoImage grafana/tempo:latest
+    user: root
+    networks:
+      - todonet
+    entrypoint:
+      - "chown"
+      - "10001:10001"
+      - "/var/tempo"
+    volumes:
+      - ./tempo-data:/var/tempo
+  # Generate fake traces...
+  # k6-tracing:
+  #   image: ghcr.io/grafana/xk6-client-tracing:v0.0.5
+  #   environment:
+  #     - ENDPOINT=otelcol:4317
+  #   restart: always
+  #   depends_on:
+  #     - otelcol
+
+  tempo:
+    image: *tempoImage
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    networks:
+      - todonet
+    volumes:
+      - ./shared/tempo.yaml:/etc/tempo.yaml
+      - ./tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # tempo
+      - "5555:4317" # otlp grpc
+    depends_on:
+      - init
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    networks:
+      - todonet
+    volumes:
+      - ./shared/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+    ports:
+      - "3000:3000"
 
 networks:
   todonet:
